@@ -1,0 +1,612 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>pepero</title>
+    <style>
+        * { box-sizing: border-box; margin: 0; padding: 0; user-select: none; }
+        body { font-family: 'Pretendard', sans-serif; overflow: hidden; background: #2c1e1a; width: 100vw; height: 100vh; }
+        
+        #webgl-container { width: 100vw; height: 100vh; position: absolute; top: 0; left: 0; z-index: 1; }
+        
+        /* 상단 중앙 모드 전환 바 */
+        .top-mode-bar {
+            position: absolute; top: 20px; left: 50%; transform: translateX(-50%); z-index: 10;
+            background: rgba(255, 255, 255, 0.9); backdrop-filter: blur(10px);
+            padding: 8px 12px; border-radius: 30px; box-shadow: 0 10px 30px rgba(0,0,0,0.2);
+            display: flex; gap: 6px; align-items: center;
+        }
+        .btn-mode {
+            padding: 8px 14px; border: none; border-radius: 20px; font-weight: bold;
+            font-size: 12px; cursor: pointer; transition: all 0.2s; background: #eee; color: #555;
+        }
+        .btn-mode.active { background: #ff6b6b; color: white; box-shadow: 0 4px 12px rgba(255, 107, 107, 0.4); }
+	
+	/* 삼선 메뉴 버튼 (모바일) */
+        .hamburger-btn {
+            position: absolute; top: 20px; right: 20px; z-index: 20;
+            background: rgba(255, 255, 255, 0.9); backdrop-filter: blur(10px);
+            border: none; width: 42px; height: 42px; border-radius: 50%;
+            display: flex; flex-direction: column; justify-content: center; align-items: center;
+            gap: 5px; cursor: pointer; box-shadow: 0 4px 15px rgba(0,0,0,0.2);
+            transition: transform 0.2s;
+        }
+        .hamburger-btn:active { transform: scale(0.92); }
+        .hamburger-btn span {
+            display: block; width: 18px; height: 2px; background: #4a2c2a; border-radius: 2px;
+        }
+
+        /* 우측 토글 패널 */
+        .right-panel {
+            position: absolute; top: 75px; right: 20px; z-index: 15;
+            background: rgba(255, 255, 255, 0.95); backdrop-filter: blur(10px);
+            padding: 16px 12px 12px 12px; border-radius: 20px; box-shadow: 0 10px 30px rgba(0,0,0,0.25);
+            display: none; flex-direction: column; gap: 8px; width: 180px;
+            animation: fadeIn 0.2s ease-in-out;
+        }
+        .right-panel.open { display: flex; }
+
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(-10px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        /* 패널 내부 닫기 버튼 */
+        .panel-close-btn {
+            position: absolute; top: 8px; right: 10px; background: none; border: none;
+            font-size: 16px; font-weight: bold; color: #888; cursor: pointer; padding: 4px;
+        }
+        .panel-close-btn:hover { color: #333; }
+        .panel-section-title { font-size: 11px; font-weight: bold; color: #6b3e2e; margin-bottom: 4px; }
+        .chips { display: flex; flex-direction: column; gap: 5px; }
+        
+        .chip {
+            padding: 6px 10px; border-radius: 10px; border: 2px solid #ddd;
+            background: #fff; font-size: 11px; font-weight: 600; cursor: pointer; text-align: center;
+            transition: all 0.2s;
+        }
+        .chip.active-base { border-color: #ff6b6b; color: #ff6b6b; font-weight: bold; background: #fff5f5; }
+        .chip.active-pen { border-color: #4a90e2; color: #4a90e2; font-weight: bold; background: #eef6fc; }
+        
+        /* 토글 스타일 */
+        .menu-toggle-btn {
+            background: #fff; border: 2px solid #e0e0e0; padding: 9px 12px; border-radius: 12px;
+            font-weight: bold; font-size: 12px; color: #4a2c2a; cursor: pointer; text-align: left;
+            display: flex; justify-content: space-between; align-items: center; transition: all 0.2s;
+        }
+        .menu-toggle-btn:hover { background: #f9f9f9; border-color: #ccc; }
+        .menu-content {
+            display: none; padding: 6px 2px 2px 2px; flex-direction: column; gap: 8px;
+        }
+        .menu-content.open { display: flex; }
+
+        /* 슬라이더 컨트롤 스타일 */
+        .slider-container { display: flex; flex-direction: column; gap: 4px; }
+        .slider-label { font-size: 10px; font-weight: 600; color: #6b3e2e; display: flex; justify-content: space-between; }
+        input[type="range"] { width: 100%; accent-color: #ff6b6b; cursor: pointer; }
+	
+	/* 액션 버튼 스타일 */
+	.btn-action {
+            color: white; border: none; padding: 10px; border-radius: 12px;
+            font-weight: bold; font-size: 12px; cursor: pointer; text-align: center; width: 100%;
+            transition: all 0.2s;
+        }
+        .btn-harden {
+            background: linear-gradient(135deg, #70a1ff 0%, #1e90ff 100%);
+            color: white; border: none; padding: 10px; border-radius: 12px;
+            font-weight: bold; font-size: 12px; cursor: pointer; text-align: center; width: 100%;
+        }
+	.btn-share {
+            background: linear-gradient(135deg, #ff758c 0%, #ff7eb3 100%);
+            box-shadow: 0 4px 12px rgba(255, 117, 140, 0.4);
+        }
+        .btn-action:hover { opacity: 0.9; transform: translateY(-1px); }
+        .btn-action:active { transform: translateY(1px); }
+
+    </style>
+    <!-- Three.js 및 OrbitControls CDN -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
+</head>
+<body>
+
+    <div id="webgl-container"></div>
+
+    <!-- 상단 모드 선택 -->
+    <div class="top-mode-bar">
+        <button class="btn-mode active" id="btn-rotate" onclick="switchMode('rotate')">회전</button>
+        <button class="btn-mode" id="btn-dip" onclick="switchMode('dip')">딥핑</button>
+        <button class="btn-mode" id="btn-craft" onclick="switchMode('craft')">초코펜</button>
+	<button class="btn-mode" id="btn-eat" onclick="switchMode('eat')">먹기</button>
+    </div>
+	
+    <!-- 우측 상단 삼선 메뉴 버튼 -->
+    <button class="hamburger-btn" onclick="toggleRightPanel()" aria-label="메뉴 열기">
+        <span></span>
+        <span></span>
+        <span></span>
+    </button>
+
+    <!-- 우측 토글  -->
+    <div class="right-panel" id="right-panel">
+        <button class="panel-close-btn" onclick="toggleRightPanel()">×</button>
+        <div style="height: 10px;"></div>
+
+        <!-- 초코 메뉴 -->
+        <div>
+            <button class="menu-toggle-btn" onclick="toggleMenu('menu-choco')">
+                <span>초코</span> <span>▼</span>
+            </button>
+            <div class="menu-content" id="menu-choco">
+                <div class="panel-section-title">베이스 초코 맛</div>
+                <div class="chips" id="base-chips">
+                    <button class="chip active-base" onclick="setBaseColor(0x4a2c2a, this)">밀크 초코</button>
+                    <button class="chip" onclick="setBaseColor(0xffffff, this)">화이트 초코</button>
+                    <button class="chip" onclick="setBaseColor(0xff8fa3, this)">딸기 초코</button>
+                    <button class="chip" onclick="setBaseColor(0x80ed99, this)">말차 초코</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- 초코펜 메뉴 -->
+        <div>
+            <button class="menu-toggle-btn" onclick="toggleMenu('menu-pen')">
+                <span>초코펜</span> <span>▼</span>
+            </button>
+            <div class="menu-content" id="menu-pen">
+                <div class="panel-section-title">초코 펜 굵기</div>
+                <div class="slider-container">
+                    <div class="slider-label"><span>얇음</span><span id="pen-size-val">굵기: 보통</span><span>두꺼움</span></div>
+                    <input type="range" id="pen-size-range" min="0.03" max="0.15" step="0.01" value="0.065" oninput="updatePenSize(this.value)">
+                </div>
+                <div class="panel-section-title" style="margin-top: 4px;">초코 펜 색상</div>
+                <div class="chips" id="pen-chips">
+                    <button class="chip active-pen" onclick="setPenColor(0xffffff, this)">화이트 펜</button>
+                    <button class="chip" onclick="setPenColor(0x4a2c2a, this)">초코 펜</button>
+                    <button class="chip" onclick="setPenColor(0xff477e, this)">딸기 펜</button>
+                    <button class="chip" onclick="setPenColor(0xffd166, this)">레몬 펜</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- 막대기 메뉴 -->
+        <div>
+            <button class="menu-toggle-btn" onclick="toggleMenu('menu-stick')">
+                <span>막대 과자</span> <span>▼</span>
+            </button>
+            <div class="menu-content" id="menu-stick">
+                <div class="panel-section-title">막대기 두께</div>
+                <div class="slider-container">
+                    <div class="slider-label"><span>가늘게</span><span id="stick-size-val">두께: 0.3</span><span>굵게</span></div>
+                    <input type="range" id="stick-size-range" min="0.15" max="0.6" step="0.05" value="0.3" oninput="updateStickRadius(this.value)">
+                </div>
+            </div>
+        </div>
+
+        <!-- 기능 버튼 -->
+        <div style="display: flex; flex-direction: column; gap: 6px;">
+            <button class="btn-action btn-harden" onclick="hardenChoco()">초코 굳히기</button>
+            <button class="btn-action btn-share" onclick="sharePeperoLink()">🔗 선물하기</button>
+        </div>
+    </div>
+
+<script>
+    function toggleRightPanel() {
+        const panel = document.getElementById('right-panel');
+        panel.classList.toggle('open');
+    }
+
+    function toggleMenu(menuId) {
+        const content = document.getElementById(menuId);
+        const isOpen = content.classList.contains('open');
+        document.querySelectorAll('.menu-content').forEach(el => el.classList.remove('open'));
+        if (!isOpen) content.classList.add('open');
+    }
+
+    const container = document.getElementById('webgl-container');
+    const scene = new THREE.Scene();
+    scene.background = new THREE.Color(0xfcedc8);
+
+    const camera = new THREE.PerspectiveCamera(45, window.innerWidth / window.innerHeight, 0.1, 1000);
+    camera.position.set(0, 1, 9);
+
+    const renderer = new THREE.WebGLRenderer({ antialias: true });
+    renderer.setSize(window.innerWidth, window.innerHeight);
+    renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+    container.appendChild(renderer.domElement);
+
+    const controls = new THREE.OrbitControls(camera, renderer.domElement);
+    controls.enableDamping = true;
+    controls.dampingFactor = 0.05;
+
+    scene.add(new THREE.AmbientLight(0xffffff, 0.7));
+    const dirLight = new THREE.DirectionalLight(0xffffff, 0.9);
+    dirLight.position.set(5, 10, 7);
+    scene.add(dirLight);
+
+    // --- 초코 그릇  ---
+    const bowlGroup = new THREE.Group();
+    const bowlMat = new THREE.MeshStandardMaterial({ color: 0x8d6e63, roughness: 0.3, side: THREE.DoubleSide });
+
+    const outerGeo = new THREE.CylinderGeometry(1.8, 1.2, 1.2, 32, 1, true);
+    bowlGroup.add(new THREE.Mesh(outerGeo, bowlMat));
+
+    const innerGeo = new THREE.CylinderGeometry(1.72, 1.14, 1.15, 32, 1, true);
+    const innerMesh = new THREE.Mesh(innerGeo, bowlMat);
+    innerMesh.position.y = 0.025;
+    bowlGroup.add(innerMesh);
+
+    const rimBottom = new THREE.Mesh(new THREE.CircleGeometry(1.2, 32).rotateX(-Math.PI / 2), bowlMat);
+    rimBottom.position.y = -0.6;
+    bowlGroup.add(rimBottom);
+
+    const rimTop = new THREE.Mesh(new THREE.RingGeometry(1.72, 1.8, 32).rotateX(-Math.PI / 2), bowlMat);
+    rimTop.position.y = 0.6;
+    bowlGroup.add(rimTop);
+
+    bowlGroup.position.y = -2.8;
+
+    let currentBaseColorHex = 0x4a2c2a;
+    const liquidHeight = 1.2 * (2 / 3);
+    const liquidGeo = new THREE.CylinderGeometry(1.62, 1.06, liquidHeight, 32);
+    const liquidMat = new THREE.MeshStandardMaterial({ color: currentBaseColorHex, roughness: 0.15, metalness: 0.1 });
+    const liquid = new THREE.Mesh(liquidGeo, liquidMat);
+    liquid.position.y = -0.55 + (liquidHeight / 2);
+    bowlGroup.add(liquid);
+
+    scene.add(bowlGroup);
+
+    // --- 빼빼로 스틱 및 딥핑 ---
+    const peperoGroup = new THREE.Group();
+    scene.add(peperoGroup);
+
+    const baseLayerGroup = new THREE.Group(); 
+    const activePenDropsGroup = new THREE.Group(); 
+    peperoGroup.add(baseLayerGroup);
+    peperoGroup.add(activePenDropsGroup);
+
+    let originalStickHeight = 5.0; 
+    let stickRadius = 0.3;
+    let stickHeight = 5.0; 
+    let maxDipDepth = 1.0; 
+    let penRadius = 0.065; 
+
+    let stickMesh, chocoMesh;
+    let currentPenColorHex = 0xffffff;
+
+    function buildPepero(currentDip) {
+        [stickMesh, chocoMesh].forEach(mesh => {
+            if (!mesh) return;
+            baseLayerGroup.remove(mesh);
+            mesh.geometry.dispose();
+            mesh.material.dispose();
+        });
+
+        stickMesh = null;
+        chocoMesh = null;
+
+        // 길이가 0 이하이면 더 이상 만들지 않음
+        if (stickHeight <= 0.01) return;
+
+        const dip = Math.min(Math.max(0.0, currentDip), stickHeight);
+        const biscuitHeight = Math.max(0.0, stickHeight - dip);
+
+        if (biscuitHeight > 0.01) {
+            const biscuitGeo = new THREE.CylinderGeometry(stickRadius, stickRadius, biscuitHeight, 32);
+            const biscuitMat = new THREE.MeshStandardMaterial({ color: 0xf3e5ab, roughness: 0.85 });
+            stickMesh = new THREE.Mesh(biscuitGeo, biscuitMat);
+            
+            const biscuitCenterY = (-originalStickHeight / 2) + (biscuitHeight / 2);
+            stickMesh.position.y = biscuitCenterY;
+            stickMesh.name = "biscuit";
+            baseLayerGroup.add(stickMesh);
+        }
+
+        if (dip > 0.01) {
+            const chocoRadius = stickRadius + 0.02;
+            const chocoGeo = new THREE.CylinderGeometry(chocoRadius, chocoRadius, dip, 32);
+            const chocoMat = new THREE.MeshStandardMaterial({ color: currentBaseColorHex, roughness: 0.3 });
+            chocoMesh = new THREE.Mesh(chocoGeo, chocoMat);
+            chocoMesh.position.y = (-originalStickHeight / 2) + (dip / 2);
+            chocoMesh.name = "chocolate";
+            baseLayerGroup.add(chocoMesh);
+        }
+    }
+
+    peperoGroup.position.y = 0.5;
+    buildPepero(maxDipDepth);
+
+    function updateStickRadius(val) {
+        stickRadius = parseFloat(val);
+        document.getElementById('stick-size-val').innerText = `두께: ${stickRadius.toFixed(2)}`;
+        buildPepero(maxDipDepth);
+    }
+
+    function updatePenSize(val) {
+        penRadius = parseFloat(val);
+        document.getElementById('pen-size-val').innerText = `굵기: ${(penRadius * 15).toFixed(1)}`;
+    }
+
+    let activeMode = 'rotate'; 
+
+    function switchMode(mode) {
+        isDragging = false;
+        lastLocalPoint = null;
+
+        activeMode = mode;
+        document.getElementById('btn-rotate').classList.toggle('active', mode === 'rotate');
+        document.getElementById('btn-dip').classList.toggle('active', mode === 'dip');
+        document.getElementById('btn-craft').classList.toggle('active', mode === 'craft');
+        document.getElementById('btn-eat').classList.toggle('active', mode === 'eat');
+
+        controls.enabled = (mode === 'rotate');
+    }
+
+    function setBaseColor(colorHex, btn) {
+        currentBaseColorHex = colorHex;
+        liquidMat.color.setHex(colorHex);
+        if (chocoMesh) {
+            chocoMesh.material.color.setHex(colorHex);
+        }
+
+        document.querySelectorAll('#base-chips .chip').forEach(b => b.classList.remove('active-base'));
+        btn.classList.add('active-base');
+    }
+
+    function setPenColor(colorHex, btn) {
+        currentPenColorHex = colorHex;
+        document.querySelectorAll('#pen-chips .chip').forEach(b => b.classList.remove('active-pen'));
+        btn.classList.add('active-pen');
+    }
+
+    function hardenChoco() {
+        if (activePenDropsGroup.children.length === 0) {
+            alert("초코가 굳어 있습니다.");
+            return;
+        }
+
+        const childrenToMove = [...activePenDropsGroup.children];
+        childrenToMove.forEach(child => {
+            activePenDropsGroup.remove(child);
+            baseLayerGroup.add(child);
+        });
+
+        alert("초코가 단단하게 굳었습니다");
+    }
+
+    function sharePeperoLink() {
+        const allDecorations = [
+            ...baseLayerGroup.children.filter(mesh => mesh !== stickMesh && mesh !== chocoMesh),
+            ...activePenDropsGroup.children
+        ];
+        
+        const dropsData = allDecorations.map(mesh => ({
+            x: Number(mesh.position.x.toFixed(3)),
+            y: Number(mesh.position.y.toFixed(3)),
+            z: Number(mesh.position.z.toFixed(3)),
+            r: Number(mesh.geometry.parameters.radius.toFixed(3)),
+            c: mesh.material.color.getHex()
+        }));
+
+        const saveData = {
+            b: currentBaseColorHex,
+            s: Number(stickRadius.toFixed(2)),
+            d: Number(maxDipDepth.toFixed(2)),
+            h: Number(stickHeight.toFixed(2)),
+            p: dropsData
+        };
+
+        try {
+            const jsonString = JSON.stringify(saveData);
+            const base64Data = btoa(unescape(encodeURIComponent(jsonString)));
+            const shareUrl = `${window.location.origin}${window.location.pathname}?gift=${base64Data}`;
+
+            navigator.clipboard.writeText(shareUrl).then(() => {
+                alert("선물 링크가 복사되었습니다");
+            }).catch(() => {
+                prompt("링크를 복사해서 선물하세요:", shareUrl);
+            });
+        } catch (e) {
+            console.error(e);
+            alert("링크 생성 중 오류가 발생했습니다.");
+        }
+    }
+
+    window.addEventListener('DOMContentLoaded', () => {
+        const urlParams = new URLSearchParams(window.location.search);
+        const giftData = urlParams.get('gift');
+
+        if (!giftData) return;
+
+        try {
+            const jsonString = decodeURIComponent(escape(atob(giftData)));
+            const data = JSON.parse(jsonString);
+
+            currentBaseColorHex = data.b;
+            liquidMat.color.setHex(data.b);
+
+            stickRadius = data.s;
+            maxDipDepth = data.d;
+            if (data.h !== undefined) {
+                stickHeight = data.h;
+            }
+
+            buildPepero(maxDipDepth);
+
+            const bottomY = -originalStickHeight / 2;
+            const newTopY = bottomY + stickHeight;
+
+            if (Array.isArray(data.p)) {
+                data.p.forEach(drop => {
+                    if (drop.y >= bottomY && drop.y <= newTopY) {
+                        const dropGeo = new THREE.SphereGeometry(drop.r, 12, 12);
+                        const dropMat = new THREE.MeshStandardMaterial({
+                            color: drop.c,
+                            roughness: 0.2,
+                            metalness: 0.1
+                        });
+
+                        const dropMesh = new THREE.Mesh(dropGeo, dropMat);
+                        dropMesh.position.set(drop.x, drop.y, drop.z);
+                        baseLayerGroup.add(dropMesh);
+                    }
+                });
+            }
+        } catch (e) {
+            console.error('선물 데이터를 불러오지 못했습니다.', e);
+        }
+    });
+
+    let isDragging = false;
+    let startY = 0;
+    let lastLocalPoint = null; 
+    const raycaster = new THREE.Raycaster();
+    const mouse = new THREE.Vector2();
+	
+    window.addEventListener('pointerdown', (e) => {
+        if (activeMode === 'rotate') return;
+        if (e.clientX > window.innerWidth - 190 && e.clientY < 450) return;
+        if (e.clientY < 70 && e.clientX > window.innerWidth / 2 - 150 && e.clientX < window.innerWidth / 2 + 150) return;
+
+        isDragging = true;
+        startY = e.clientY;
+
+        if (activeMode === 'craft') {
+            lastLocalPoint = null;
+            drawStroke(e);
+        } else if (activeMode === 'eat') {
+            eatPepero();
+        }
+    });
+
+    window.addEventListener('pointermove', (e) => {
+        if (!isDragging || activeMode === 'rotate') return;
+
+        const deltaY = (e.clientY - startY);
+
+        if (activeMode === 'dip') {
+            peperoGroup.position.y -= deltaY * 0.008;
+            peperoGroup.position.y = Math.max(Math.min(peperoGroup.position.y, 3.0), -2.0);
+
+            let downwardMovement = Math.max(0, 0.5 - peperoGroup.position.y);
+            let currentCalculatedDip = 1.0 + downwardMovement * 1.5;
+
+            if (currentCalculatedDip > maxDipDepth) {
+                maxDipDepth = Math.min(currentCalculatedDip, stickHeight - 0.5);
+                buildPepero(maxDipDepth);
+            }
+
+            startY = e.clientY;
+        } 
+        else if (activeMode === 'craft') {
+            drawStroke(e);
+        }
+    });
+
+    window.addEventListener('pointerup', () => { 
+        isDragging = false; 
+        lastLocalPoint = null;
+    });
+
+    function drawStroke(e) {
+        if (activeMode !== 'craft' || stickHeight <= 0) return;
+
+        const rect = renderer.domElement.getBoundingClientRect();
+        mouse.x = ((e.clientX - rect.left) / rect.width) * 2 - 1;
+        mouse.y = -((e.clientY - rect.top) / rect.height) * 2 + 1;
+
+        raycaster.setFromCamera(mouse, camera);
+
+        const targets = baseLayerGroup.children;
+        const intersects = raycaster.intersectObjects(targets, true);
+
+        if (intersects.length > 0) {
+            const hitPoint = intersects[0].point;
+            peperoGroup.worldToLocal(hitPoint);
+            hitPoint.x *= 1.04;
+            hitPoint.z *= 1.04;
+
+            if (lastLocalPoint) {
+                const distance = lastLocalPoint.distanceTo(hitPoint);
+                const stepSize = 0.012; 
+                const steps = Math.max(1, Math.floor(distance / stepSize));
+
+                for (let i = 1; i <= steps; i++) {
+                    const t = i / steps;
+                    const interpPoint = new THREE.Vector3().lerpVectors(lastLocalPoint, hitPoint, t);
+                    spawnDrop(interpPoint);
+                }
+            } else {
+                spawnDrop(hitPoint);
+            }
+            lastLocalPoint = hitPoint.clone();
+        }
+    }
+
+    function spawnDrop(pos) {
+        const dropGeo = new THREE.SphereGeometry(penRadius, 12, 12);
+        const dropMat = new THREE.MeshStandardMaterial({ 
+            color: currentPenColorHex, 
+            roughness: 0.2, 
+            metalness: 0.1 
+        });
+        const dropMesh = new THREE.Mesh(dropGeo, dropMat);
+        dropMesh.position.copy(pos);
+        activePenDropsGroup.add(dropMesh); 
+    }
+
+    // -- 먹기 기능 --
+    function eatPepero() {
+        if (stickHeight <= 0) {
+            alert("다 먹었어요");
+            return;
+        }
+
+        const biteSize = 0.5;
+        stickHeight = Math.max(0, stickHeight - biteSize);
+        
+        const bottomY = -originalStickHeight / 2;
+        const newTopY = bottomY + stickHeight;
+
+        buildPepero(maxDipDepth);
+
+        // 초코펜 지우기
+        const activeDrops = [...activePenDropsGroup.children];
+        activeDrops.forEach(mesh => {
+            if (stickHeight <= 0 || mesh.position.y > newTopY || mesh.position.y < bottomY) {
+                activePenDropsGroup.remove(mesh);
+            }
+        });
+
+        const baseChildren = [...baseLayerGroup.children];
+        baseChildren.forEach(mesh => {
+            if (mesh !== stickMesh && mesh !== chocoMesh) {
+                if (stickHeight <= 0 || mesh.position.y > newTopY || mesh.position.y < bottomY) {
+                    baseLayerGroup.remove(mesh);
+                }
+            }
+        });
+
+        if (stickHeight <= 0) {
+            setTimeout(() => {
+                alert("다 먹었어요");
+            }, 100);
+        }
+    }
+
+    function animate() {
+        requestAnimationFrame(animate);
+        controls.update();
+        renderer.render(scene, camera);
+    }
+    animate();
+
+    window.addEventListener('resize', () => {
+        camera.aspect = window.innerWidth / window.innerHeight;
+        camera.updateProjectionMatrix();
+        renderer.setSize(window.innerWidth, window.innerHeight);
+    });
+</script>
+</body>
+</html>
