@@ -32,31 +32,81 @@
         
         /* 상단 중앙 모드 전환 바 */
         .top-mode-bar {
-            position: absolute; top: 20px; left: 50%; transform: translateX(-50%); z-index: 10;
-            background: rgba(255, 255, 255, 0.9); backdrop-filter: blur(10px);
-            padding: 8px 12px; border-radius: 30px; box-shadow: 0 10px 30px rgba(0,0,0,0.2);
-            display: flex; gap: 6px; align-items: center;
-        }
-        .btn-mode {
-            padding: 8px 14px; border: none; border-radius: 20px; font-weight: bold;
-            font-size: 12px; cursor: pointer; transition: all 0.2s; background: #eee; color: #555;
-        }
+            position: absolute; 
+		    top: 20px; 
+		    left: 50%; 
+		    transform: translateX(-50%); 
+		    z-index: 10;
+		    background: rgba(255, 255, 255, 0.9); 
+		    backdrop-filter: blur(10px);
+		    padding: 8px 12px; 
+		    border-radius: 30px; 
+		    box-shadow: 0 10px 30px rgba(0,0,0,0.2);
+		    display: flex; 
+		    gap: 6px; 
+		    align-items: center;
+		}
+		.btn-mode {
+		    padding: 8px 14px; 
+		    border: none; 
+		    border-radius: 20px; 
+		    font-weight: bold;
+		    font-size: 12px; 
+		    cursor: pointer; 
+		    transition: all 0.2s; 
+		    background: #eee; 
+		    color: #555;
+		    white-space: nowrap;
+		}
         .btn-mode.active { background: #ff6b6b; color: white; box-shadow: 0 4px 12px rgba(255, 107, 107, 0.4); }
 	
 	/* 삼선 메뉴 버튼 (모바일) */
         .hamburger-btn {
-            position: absolute; top: 20px; right: 20px; z-index: 20;
-            background: rgba(255, 255, 255, 0.9); backdrop-filter: blur(10px);
-            border: none; width: 42px; height: 42px; border-radius: 50%;
-            display: flex; flex-direction: column; justify-content: center; align-items: center;
-            gap: 5px; cursor: pointer; box-shadow: 0 4px 15px rgba(0,0,0,0.2);
-            transition: transform 0.2s;
+            position: absolute; 
+		    top: 20px; 
+		    right: 20px; 
+		    z-index: 20;
+		    background: rgba(255, 255, 255, 0.9); 
+		    backdrop-filter: blur(10px);
+		    border: none; 
+		    width: 42px; 
+		    height: 42px; 
+		    border-radius: 50%;
+		    display: flex; 
+		    flex-direction: column; 
+		    justify-content: center; 
+		    align-items: center;
+		    gap: 5px; 
+		    cursor: pointer; 
+		    box-shadow: 0 4px 15px rgba(0,0,0,0.2);
+		    transition: transform 0.2s;
         }
         .hamburger-btn:active { transform: scale(0.92); }
         .hamburger-btn span {
             display: block; width: 18px; height: 2px; background: #4a2c2a; border-radius: 2px;
         }
 
+		/* 모바일 반응형 */
+		@media screen and (max-width: 768px) {
+		    .top-mode-bar {
+		        left: 15px;
+		        transform: none;
+		        max-width: calc(100% - 80px);
+		        overflow-x: auto;
+		        padding: 6px 8px;
+		        scrollbar-width: none;
+		    }
+		    
+		    .top-mode-bar::-webkit-scrollbar {
+		        display: none; 
+		    }
+		
+		    .btn-mode {
+		        padding: 6px 10px;
+		        font-size: 11px;
+		    }
+		}
+	
         /* 우측 토글 패널 */
         .right-panel {
             position: absolute; top: 75px; right: 20px; z-index: 15;
@@ -124,6 +174,9 @@
         .btn-action:hover { opacity: 0.9; transform: translateY(-1px); }
         .btn-action:active { transform: translateY(1px); }
 
+		canvas {
+		    touch-action: none; 
+		}
     </style>
     <!-- Three.js 및 OrbitControls CDN -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
@@ -311,26 +364,29 @@
 
         const dip = Math.min(Math.max(0.0, currentDip), stickHeight);
         const biscuitHeight = Math.max(0.0, stickHeight - dip);
+	
+    	const bottomY = -originalStickHeight / 2;
 
-        if (biscuitHeight > 0.01) {
-            const biscuitGeo = new THREE.CylinderGeometry(stickRadius, stickRadius, biscuitHeight, 32);
-            const biscuitMat = new THREE.MeshStandardMaterial({ color: 0xf3e5ab, roughness: 0.85 });
-            stickMesh = new THREE.Mesh(biscuitGeo, biscuitMat);
-            
-            const biscuitCenterY = (-originalStickHeight / 2) + (biscuitHeight / 2);
-            stickMesh.position.y = biscuitCenterY;
-            stickMesh.name = "biscuit";
-            baseLayerGroup.add(stickMesh);
-        }
+        
 
         if (dip > 0.01) {
             const chocoRadius = stickRadius + 0.02;
             const chocoGeo = new THREE.CylinderGeometry(chocoRadius, chocoRadius, dip, 32);
             const chocoMat = new THREE.MeshStandardMaterial({ color: currentBaseColorHex, roughness: 0.3 });
             chocoMesh = new THREE.Mesh(chocoGeo, chocoMat);
-            chocoMesh.position.y = (-originalStickHeight / 2) + (dip / 2);
+            chocoMesh.position.y = bottomY + (dip / 2);
             chocoMesh.name = "chocolate";
             baseLayerGroup.add(chocoMesh);
+        }
+
+		if (biscuitHeight > 0.01) {
+            const biscuitGeo = new THREE.CylinderGeometry(stickRadius, stickRadius, biscuitHeight, 32);
+            const biscuitMat = new THREE.MeshStandardMaterial({ color: 0xf3e5ab, roughness: 0.85 });
+            stickMesh = new THREE.Mesh(biscuitGeo, biscuitMat);
+            
+            stickMesh.position.y = bottomY + dip+ (biscuitHeight / 2);
+        stickMesh.name = "biscuit";
+        baseLayerGroup.add(stickMesh);
         }
     }
 
@@ -528,7 +584,11 @@
         isDragging = false; 
         lastLocalPoint = null;
     });
-
+	window.addEventListener('pointercancel', () => {
+	    isDragging = false;
+	    lastLocalPoint = null;
+	});
+	
     function drawStroke(e) {
         if (activeMode !== 'craft' || stickHeight <= 0) return;
 
