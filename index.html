@@ -452,89 +452,139 @@
         alert("초코가 단단하게 굳었습니다");
     }
 
-    function sharePeperoLink() {
-        const allDecorations = [
-            ...baseLayerGroup.children.filter(mesh => mesh !== stickMesh && mesh !== chocoMesh),
-            ...activePenDropsGroup.children
-        ];
-        
-        const dropsData = allDecorations.map(mesh => ({
-            x: Number(mesh.position.x.toFixed(3)),
-            y: Number(mesh.position.y.toFixed(3)),
-            z: Number(mesh.position.z.toFixed(3)),
-            r: Number(mesh.geometry.parameters.radius.toFixed(3)),
-            c: mesh.material.color.getHex()
-        }));
+    async function sharePeperoLink() {
+	    try {
+	        // Strokes 기반 JSON 구조 생성
+	        const saveData = {
+	            b: currentBaseColorHex,
+	            s: stickRadius,
+	            d: maxDipDepth,
+	            h: stickHeight,
+	            st: allStrokes
+	        };
+	
+	        const jsonString = JSON.stringify(saveData);
+	
+	        // Deflate 압축 및 Base64Url 변환
+	        const blob = new Blob([jsonString]);
+	        const stream = blob.stream().pipeThrough(new CompressionStream('deflate'));
+	        const compressedBlob = await new Response(stream).blob();
+	        const compressedBuffer = await compressedBlob.arrayBuffer();
+	
+	        let binary = '';
+	        const bytes = new Uint8Array(compressedBuffer);
+	        for (let i = 0; i < bytes.byteLength; i++) {
+	            binary += String.fromCharCode(bytes[i]);
+	        }
+	        const compressedData = btoa(binary).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+	        
+	        const shareUrl = `${window.location.origin}${window.location.pathname}?gift=${compressedData}`;
+	        
+	        navigator.clipboard.writeText(shareUrl).then(() => {
+	            alert("선물 링크가 복사되었습니다");
+	        }).catch(() => {
+	            prompt("링크를 복사해서 선물하세요:", shareUrl);
+	        });
+	    } catch (e) {
+	        console.error(e);
+	        alert("링크 생성 중 오류가 발생했습니다.");
+	    }
+	}
 
-        const saveData = {
-            b: currentBaseColorHex,
-            s: Number(stickRadius.toFixed(2)),
-            d: Number(maxDipDepth.toFixed(2)),
-            h: Number(stickHeight.toFixed(2)),
-            p: dropsData
-        };
-
-        try {
-            const jsonString = JSON.stringify(saveData);
-            const base64Data = btoa(unescape(encodeURIComponent(jsonString)));
-            const shareUrl = `${window.location.origin}${window.location.pathname}?gift=${base64Data}`;
-
-            navigator.clipboard.writeText(shareUrl).then(() => {
-                alert("선물 링크가 복사되었습니다");
-            }).catch(() => {
-                prompt("링크를 복사해서 선물하세요:", shareUrl);
-            });
-        } catch (e) {
-            console.error(e);
-            alert("링크 생성 중 오류가 발생했습니다.");
-        }
-    }
-
-    window.addEventListener('DOMContentLoaded', () => {
-        const urlParams = new URLSearchParams(window.location.search);
-        const giftData = urlParams.get('gift');
-
-        if (!giftData) return;
-
-        try {
-            const jsonString = decodeURIComponent(escape(atob(giftData)));
-            const data = JSON.parse(jsonString);
-
-            currentBaseColorHex = data.b;
-            liquidMat.color.setHex(data.b);
-
-            stickRadius = data.s;
-            maxDipDepth = data.d;
-            if (data.h !== undefined) {
-                stickHeight = data.h;
-            }
-
-            buildPepero(maxDipDepth);
-
-            const bottomY = -originalStickHeight / 2;
-            const newTopY = bottomY + stickHeight;
-
-            if (Array.isArray(data.p)) {
-                data.p.forEach(drop => {
-                    if (drop.y >= bottomY && drop.y <= newTopY) {
-                        const dropGeo = new THREE.SphereGeometry(drop.r, 12, 12);
-                        const dropMat = new THREE.MeshStandardMaterial({
-                            color: drop.c,
-                            roughness: 0.2,
-                            metalness: 0.1
-                        });
-
-                        const dropMesh = new THREE.Mesh(dropGeo, dropMat);
-                        dropMesh.position.set(drop.x, drop.y, drop.z);
-                        baseLayerGroup.add(dropMesh);
-                    }
-                });
-            }
-        } catch (e) {
-            console.error('선물 데이터를 불러오지 못했습니다.', e);
-        }
-    });
-
+    window.addEventListener('DOMContentLoaded', async () => {
+	    const urlParams = new URLSearchParams(window.location.search);
+	    const giftData = urlParams.get('gift');
+	
+	    if (!giftData) return;
+	
+	    try {
+	        let base64 = giftData.replace(/-/g, '+').replace(/_/g, '/');
+	        while (base64.length % 4) base64 += '=';
+	        const binary = atob(base64);
+	        const bytes = new Uint8Array(binary.length);
+	        for (let i = 0; i < binary.length; i++) {
+	            bytes[i] = binary.charCodeAt(i);
+	        }
+	
+	        const blob = new Blob([bytes]);
+	        const stream = blob.stream().pipeThrough(new DecompressionStream('deflate'));
+	        const jsonString = await new Response(stream).text();
+	        
+	        if (!jsonString) return;
+	        const data = JSON.parse(jsonString);
+	
+	        currentBaseColorHex = data.b;
+	        liquidMat.color.setHex(typeof data.b === 'string' ? parseInt(data.b.replace('#', ''), 16) : data.b);
+	
+	        stickRadius = data.s;
+	        maxDipDepth = data.d;
+	        if (data.h !== undefined) stickHeight = data.h;
+	
+	        buildPepero(maxDipDepth);
+	
+	        if (Array.isArray(data.st)) {
+	            data.st.forEach(stroke => {
+	                const pts = stroke.pts;
+	                if (!pts || pts.length === 0) return;
+	
+	                let lastPt = null;
+	                pts.forEach(pt => {
+	                    const currentPt = new THREE.Vector3(pt.x, pt.y, pt.z);
+	                    
+	                    if (lastPt) {
+	                        const distance = lastPt.distanceTo(currentPt);
+	                        const stepSize = 0.012; 
+	                        const steps = Math.max(1, Math.floor(distance / stepSize));
+	
+	                        for (let i = 1; i <= steps; i++) {
+	                            const t = i / steps;
+	                            const interpPoint = new THREE.Vector3().lerpVectors(lastPt, currentPt, t);
+	                            spawnDrop(interpPoint, stroke.c, stroke.r);
+	                        }
+	                    } else {
+	                        spawnDrop(currentPt, stroke.c, stroke.r);
+	                    }
+	                    lastPt = currentPt.clone();
+	                });
+	            });
+	        }
+	    } catch (e) {
+	        console.error('선물 데이터를 불러오지 못했습니다.', e);
+	    }
+	});
+	
+	    let isDragging = false;
+	    let startY = 0;
+	    let lastLocalPoint = null; 
+	    const raycaster = new THREE.Raycaster();
+	    const mouse = new THREE.Vector2();
+	
+	    let allStrokes = [];
+	    let currentStroke = null;
+	
+	    window.addEventListener('pointerdown', (e) => {
+	        if (activeMode === 'rotate') return;
+	        if (e.clientX > window.innerWidth - 190 && e.clientY < 450) return;
+	        if (e.clientY < 70 && e.clientX > window.innerWidth / 2 - 150 && e.clientX < window.innerWidth / 2 + 150) return;
+	
+	        isDragging = true;
+	    startY = e.clientY;
+	
+	    if (activeMode === 'craft') {
+	        lastLocalPoint = null;
+	        // 새로운 획 생성
+	        currentStroke = {
+	            c: currentPenColorHex,
+	            r: penRadius,
+	            pts: []
+	        };
+	        allStrokes.push(currentStroke);
+	        drawStroke(e);
+	    } else if (activeMode === 'eat') {
+	        eatPepero();
+	    }
+	});
+	
     let isDragging = false;
     let startY = 0;
     let lastLocalPoint = null; 
@@ -547,39 +597,22 @@
         if (e.clientY < 70 && e.clientX > window.innerWidth / 2 - 150 && e.clientX < window.innerWidth / 2 + 150) return;
 
         isDragging = true;
-        startY = e.clientY;
-
-        if (activeMode === 'craft') {
-            lastLocalPoint = null;
-            drawStroke(e);
-        } else if (activeMode === 'eat') {
-            eatPepero();
-        }
-    });
-
-    window.addEventListener('pointermove', (e) => {
-        if (!isDragging || activeMode === 'rotate') return;
-
-        const deltaY = (e.clientY - startY);
-
-        if (activeMode === 'dip') {
-            peperoGroup.position.y -= deltaY * 0.008;
-            peperoGroup.position.y = Math.max(Math.min(peperoGroup.position.y, 3.0), -2.0);
-
-            let downwardMovement = Math.max(0, 0.5 - peperoGroup.position.y);
-            let currentCalculatedDip = 1.0 + downwardMovement * 1.5;
-
-            if (currentCalculatedDip > maxDipDepth) {
-                maxDipDepth = Math.min(currentCalculatedDip, stickHeight - 0.5);
-                buildPepero(maxDipDepth);
-            }
-
-            startY = e.clientY;
-        } 
-        else if (activeMode === 'craft') {
-            drawStroke(e);
-        }
-    });
+	    startY = e.clientY;
+	
+	    if (activeMode === 'craft') {
+	        lastLocalPoint = null;
+			
+	        currentStroke = {
+	            c: currentPenColorHex,
+	            r: penRadius,
+	            pts: []
+	        };
+	        allStrokes.push(currentStroke);
+	        drawStroke(e);
+	    } else if (activeMode === 'eat') {
+	        eatPepero();
+	    }
+	});
 
     window.addEventListener('pointerup', () => { 
         isDragging = false; 
@@ -591,51 +624,60 @@
 	});
 	
     function drawStroke(e) {
-        if (activeMode !== 'craft' || stickHeight <= 0) return;
+	    if (activeMode !== 'craft' || stickHeight <= 0) return;
+	
+	    const rect = renderer.domElement.getBoundingClientRect();
+	    mouse.x = ((e.clientX - rect.left) / rect.width) * 2 - 1;
+	    mouse.y = -((e.clientY - rect.top) / rect.height) * 2 + 1;
+	
+	    raycaster.setFromCamera(mouse, camera);
+	
+	    const targets = baseLayerGroup.children;
+	    const intersects = raycaster.intersectObjects(targets, true);
+	
+	    if (intersects.length > 0) {
+	        const hitPoint = intersects[0].point;
+	        peperoGroup.worldToLocal(hitPoint);
+	        hitPoint.x *= 1.04;
+	        hitPoint.z *= 1.04;
+	
+	        if (currentStroke) {
+	            currentStroke.pts.push({ x: hitPoint.x, y: hitPoint.y, z: hitPoint.z });
+	        }
+	
+	        if (lastLocalPoint) {
+	            const distance = lastLocalPoint.distanceTo(hitPoint);
+	            const stepSize = 0.012; 
+	            const steps = Math.max(1, Math.floor(distance / stepSize));
+	
+	            for (let i = 1; i <= steps; i++) {
+	                const t = i / steps;
+	                const interpPoint = new THREE.Vector3().lerpVectors(lastLocalPoint, hitPoint, t);
+	                spawnDrop(interpPoint);
+	            }
+	        } else {
+	            spawnDrop(hitPoint);
+	        }
+	        lastLocalPoint = hitPoint.clone();
+	    }
+	}
 
-        const rect = renderer.domElement.getBoundingClientRect();
-        mouse.x = ((e.clientX - rect.left) / rect.width) * 2 - 1;
-        mouse.y = -((e.clientY - rect.top) / rect.height) * 2 + 1;
-
-        raycaster.setFromCamera(mouse, camera);
-
-        const targets = baseLayerGroup.children;
-        const intersects = raycaster.intersectObjects(targets, true);
-
-        if (intersects.length > 0) {
-            const hitPoint = intersects[0].point;
-            peperoGroup.worldToLocal(hitPoint);
-            hitPoint.x *= 1.04;
-            hitPoint.z *= 1.04;
-
-            if (lastLocalPoint) {
-                const distance = lastLocalPoint.distanceTo(hitPoint);
-                const stepSize = 0.012; 
-                const steps = Math.max(1, Math.floor(distance / stepSize));
-
-                for (let i = 1; i <= steps; i++) {
-                    const t = i / steps;
-                    const interpPoint = new THREE.Vector3().lerpVectors(lastLocalPoint, hitPoint, t);
-                    spawnDrop(interpPoint);
-                }
-            } else {
-                spawnDrop(hitPoint);
-            }
-            lastLocalPoint = hitPoint.clone();
-        }
-    }
-
-    function spawnDrop(pos) {
-        const dropGeo = new THREE.SphereGeometry(penRadius, 12, 12);
-        const dropMat = new THREE.MeshStandardMaterial({ 
-            color: currentPenColorHex, 
-            roughness: 0.2, 
-            metalness: 0.1 
-        });
-        const dropMesh = new THREE.Mesh(dropGeo, dropMat);
-        dropMesh.position.copy(pos);
-        activePenDropsGroup.add(dropMesh); 
-    }
+    function spawnDrop(pos, customColor, customRadius, targetGroup = activePenDropsGroup) {
+	    const radius = customRadius !== undefined ? customRadius : (typeof penRadius !== 'undefined' ? penRadius : 0.05);
+	    const color = customColor !== undefined ? customColor : (typeof currentPenColorHex !== 'undefined' ? currentPenColorHex : 0xffffff);
+	
+	    const dropGeo = new THREE.SphereGeometry(radius, 12, 12);
+	    const dropMat = new THREE.MeshStandardMaterial({ 
+	        color: color, 
+	        roughness: 0.2, 
+	        metalness: 0.1 
+	    });
+	    
+	    const dropMesh = new THREE.Mesh(dropGeo, dropMat);
+	    dropMesh.position.copy(pos);
+	    
+	    targetGroup.add(dropMesh);
+	}
 
     // -- 먹기 기능 --
     function eatPepero() {
