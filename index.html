@@ -652,7 +652,7 @@
                 await navigator.clipboard.writeText(shareUrl);
                 alert(`선물 링크가 복사되었습니다.`);
             } catch (_) {
-                prompt(`링크를 복사해서 선물하세요., shareUrl);
+                prompt(`링크를 복사해서 선물하세요.`, shareUrl);
             }
         } catch (e) {
             console.error('SGJC 링크 생성 오류:', e);
