@@ -585,35 +585,6 @@
 	    }
 	});
 	
-    let isDragging = false;
-    let startY = 0;
-    let lastLocalPoint = null; 
-    const raycaster = new THREE.Raycaster();
-    const mouse = new THREE.Vector2();
-	
-    window.addEventListener('pointerdown', (e) => {
-        if (activeMode === 'rotate') return;
-        if (e.clientX > window.innerWidth - 190 && e.clientY < 450) return;
-        if (e.clientY < 70 && e.clientX > window.innerWidth / 2 - 150 && e.clientX < window.innerWidth / 2 + 150) return;
-
-        isDragging = true;
-	    startY = e.clientY;
-	
-	    if (activeMode === 'craft') {
-	        lastLocalPoint = null;
-			
-	        currentStroke = {
-	            c: currentPenColorHex,
-	            r: penRadius,
-	            pts: []
-	        };
-	        allStrokes.push(currentStroke);
-	        drawStroke(e);
-	    } else if (activeMode === 'eat') {
-	        eatPepero();
-	    }
-	});
-
     window.addEventListener('pointerup', () => { 
         isDragging = false; 
         lastLocalPoint = null;
