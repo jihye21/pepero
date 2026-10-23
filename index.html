@@ -585,13 +585,13 @@
         const d = readVarUint() / SGJC_SCALE;
         const h = readVarUint() / SGJC_SCALE;
         const strokeCount = readVarUint();
-        if (strokeCount > 10000) throw new Error('획 개수가 비정상적으로 많습니다.');
+        if (strokeCount > 10000) throw new Error('데코가 너무 많습니다.');
         const st = [];
         for (let si = 0; si < strokeCount; si++) {
             const c = readU32();
             const r = readVarUint() / SGJC_SCALE;
             const pointCount = readVarUint();
-            if (pointCount > 200000) throw new Error('획의 점 개수가 비정상적으로 많습니다.');
+            if (pointCount > 200000) throw new Error('데코가 너무 많습니다.');
             const pts = [];
             let prevQ = [0, 0, 0];
             for (let pi = 0; pi < pointCount; pi++) {
@@ -650,9 +650,9 @@
 
             try {
                 await navigator.clipboard.writeText(shareUrl);
-                alert(`선물 링크가 복사되었습니다. (링크 길이: ${shareUrl.length.toLocaleString()}자)`);
+                alert(`선물 링크가 복사되었습니다.`);
             } catch (_) {
-                prompt(`링크를 복사해서 선물하세요. (길이: ${shareUrl.length.toLocaleString()}자)`, shareUrl);
+                prompt(`링크를 복사해서 선물하세요., shareUrl);
             }
         } catch (e) {
             console.error('SGJC 링크 생성 오류:', e);
