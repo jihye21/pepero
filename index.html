@@ -584,6 +584,30 @@
 	        eatPepero();
 	    }
 	});
+
+	window.addEventListener('pointermove', (e) => {
+        if (!isDragging || activeMode === 'rotate') return;
+
+        const deltaY = (e.clientY - startY);
+
+        if (activeMode === 'dip') {
+            peperoGroup.position.y -= deltaY * 0.008;
+            peperoGroup.position.y = Math.max(Math.min(peperoGroup.position.y, 3.0), -2.0);
+
+            let downwardMovement = Math.max(0, 0.5 - peperoGroup.position.y);
+            let currentCalculatedDip = 1.0 + downwardMovement * 1.5;
+
+            if (currentCalculatedDip > maxDipDepth) {
+                maxDipDepth = Math.min(currentCalculatedDip, stickHeight - 0.5);
+                buildPepero(maxDipDepth);
+            }
+
+            startY = e.clientY;
+        } 
+        else if (activeMode === 'craft') {
+            drawStroke(e);
+        }
+    });
 	
     window.addEventListener('pointerup', () => { 
         isDragging = false; 
