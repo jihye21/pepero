@@ -34,25 +34,25 @@
         /* 상단 중앙 모드 전환 바 */
         .top-mode-bar {
             position: absolute; 
-		    top: 20px; 
+		    top: 16px; 
 		    left: 50%; 
 		    transform: translateX(-50%); 
 		    z-index: 10;
 		    background: rgba(255, 255, 255, 0.9); 
 		    backdrop-filter: blur(10px);
-		    padding: 8px 12px; 
+		    padding: 6px 9px; 
 		    border-radius: 30px; 
 		    box-shadow: 0 10px 30px rgba(0,0,0,0.2);
 		    display: flex; 
-		    gap: 6px; 
+		    gap: 4px; 
 		    align-items: center;
 		}
 		.btn-mode {
-		    padding: 8px 14px; 
+		    padding: 6px 10px; 
 		    border: none; 
 		    border-radius: 20px; 
 		    font-weight: bold;
-		    font-size: 12px; 
+		    font-size: 11px; 
 		    cursor: pointer; 
 		    transition: all 0.2s; 
 		    background: #eee; 
@@ -64,20 +64,20 @@
 	/* 삼선 메뉴 버튼 (모바일) */
         .hamburger-btn {
             position: absolute; 
-		    top: 20px; 
-		    right: 20px; 
+		    top: 16px; 
+		    right: 16px; 
 		    z-index: 20;
 		    background: rgba(255, 255, 255, 0.9); 
 		    backdrop-filter: blur(10px);
 		    border: none; 
-		    width: 42px; 
-		    height: 42px; 
+		    width: 36px; 
+		    height: 36px; 
 		    border-radius: 50%;
 		    display: flex; 
 		    flex-direction: column; 
 		    justify-content: center; 
 		    align-items: center;
-		    gap: 5px; 
+		    gap: 4px; 
 		    cursor: pointer; 
 		    box-shadow: 0 4px 15px rgba(0,0,0,0.2);
 		    transition: transform 0.2s;
@@ -89,6 +89,15 @@
 
 		/* 모바일 반응형 */
 		@media screen and (max-width: 768px) {
+            .hamburger-btn { top: 20px; right: 20px; width: 42px; height: 42px; gap: 5px; }
+            .hamburger-btn span { width: 18px; }
+            .right-panel { top: 75px; right: 20px; width: 180px; padding: 16px 12px 12px 12px; gap: 8px; border-radius: 20px; }
+            .panel-section-title { font-size: 11px; margin-bottom: 4px; }
+            .chips { gap: 5px; }
+            .chip { padding: 6px 10px; font-size: 11px; border-radius: 10px; }
+            .menu-toggle-btn { padding: 9px 12px; font-size: 12px; border-radius: 12px; }
+            .menu-content { padding: 6px 2px 2px 2px; gap: 8px; }
+            .btn-action, .btn-harden { padding: 10px; font-size: 12px; border-radius: 12px; }
 		    .top-mode-bar {
 		        left: 15px;
 		        transform: none;
@@ -110,10 +119,10 @@
 	
         /* 우측 토글 패널 */
         .right-panel {
-            position: absolute; top: 75px; right: 20px; z-index: 15;
+            position: absolute; top: 64px; right: 16px; z-index: 15;
             background: rgba(255, 255, 255, 0.95); backdrop-filter: blur(10px);
-            padding: 16px 12px 12px 12px; border-radius: 20px; box-shadow: 0 10px 30px rgba(0,0,0,0.25);
-            display: none; flex-direction: column; gap: 8px; width: 180px;
+            padding: 14px 10px 10px 10px; border-radius: 16px; box-shadow: 0 8px 24px rgba(0,0,0,0.22);
+            display: none; flex-direction: column; gap: 6px; width: 164px;
             animation: fadeIn 0.2s ease-in-out;
         }
         .right-panel.open { display: flex; }
@@ -129,12 +138,12 @@
             font-size: 16px; font-weight: bold; color: #888; cursor: pointer; padding: 4px;
         }
         .panel-close-btn:hover { color: #333; }
-        .panel-section-title { font-size: 11px; font-weight: bold; color: #6b3e2e; margin-bottom: 4px; }
-        .chips { display: flex; flex-direction: column; gap: 5px; }
+        .panel-section-title { font-size: 10px; font-weight: bold; color: #6b3e2e; margin-bottom: 3px; }
+        .chips { display: flex; flex-direction: column; gap: 4px; }
         
         .chip {
-            padding: 6px 10px; border-radius: 10px; border: 2px solid #ddd;
-            background: #fff; font-size: 11px; font-weight: 600; cursor: pointer; text-align: center;
+            padding: 5px 8px; border-radius: 8px; border: 2px solid #ddd;
+            background: #fff; font-size: 10px; font-weight: 600; cursor: pointer; text-align: center;
             transition: all 0.2s;
         }
         .chip.active-base { border-color: #ff6b6b; color: #ff6b6b; font-weight: bold; background: #fff5f5; }
@@ -142,13 +151,13 @@
         
         /* 토글 스타일 */
         .menu-toggle-btn {
-            background: #fff; border: 2px solid #e0e0e0; padding: 9px 12px; border-radius: 12px;
-            font-weight: bold; font-size: 12px; color: #4a2c2a; cursor: pointer; text-align: left;
+            background: #fff; border: 2px solid #e0e0e0; padding: 7px 9px; border-radius: 10px;
+            font-weight: bold; font-size: 11px; color: #4a2c2a; cursor: pointer; text-align: left;
             display: flex; justify-content: space-between; align-items: center; transition: all 0.2s;
         }
         .menu-toggle-btn:hover { background: #f9f9f9; border-color: #ccc; }
         .menu-content {
-            display: none; padding: 6px 2px 2px 2px; flex-direction: column; gap: 8px;
+            display: none; padding: 5px 2px 2px 2px; flex-direction: column; gap: 6px;
         }
         .menu-content.open { display: flex; }
 
@@ -159,13 +168,13 @@
 	
 	/* 액션 버튼 스타일 */
 	.btn-action {
-            color: white; border: none; padding: 10px; border-radius: 12px;
-            font-weight: bold; font-size: 12px; cursor: pointer; text-align: center; width: 100%;
+            color: white; border: none; padding: 8px; border-radius: 10px;
+            font-weight: bold; font-size: 11px; cursor: pointer; text-align: center; width: 100%;
             transition: all 0.2s;
         }
         .btn-harden {
             background: linear-gradient(135deg, #70a1ff 0%, #1e90ff 100%);
-            color: white; border: none; padding: 10px; border-radius: 12px;
+            color: white; border: none; padding: 8px; border-radius: 10px;
             font-weight: bold; font-size: 12px; cursor: pointer; text-align: center; width: 100%;
         }
 	.btn-share {
@@ -452,7 +461,7 @@
         alert("초코가 단단하게 굳었습니다");
     }
 
-    const SGJC_MAGIC = [0x53, 0x47, 0x4a, 0x02]; // "SGJ", version 2
+    const SGJC_MAGIC = [0x53, 0x47, 0x4a, 0x02];
     const SGJC_SCALE = 10000;
 
     function pointSegmentDistance(p, a, b) {
@@ -641,9 +650,9 @@
 
             try {
                 await navigator.clipboard.writeText(shareUrl);
-                alert(`선물 링크가 복사되었습니다`);
+                alert(`선물 링크가 복사되었습니다. (링크 길이: ${shareUrl.length.toLocaleString()}자)`);
             } catch (_) {
-                prompt(`링크를 복사해서 선물하세요.`, shareUrl);
+                prompt(`링크를 복사해서 선물하세요. (길이: ${shareUrl.length.toLocaleString()}자)`, shareUrl);
             }
         } catch (e) {
             console.error('SGJC 링크 생성 오류:', e);
