@@ -452,107 +452,277 @@
         alert("초코가 단단하게 굳었습니다");
     }
 
+    const SGJC_MAGIC = [0x53, 0x47, 0x4a, 0x02]; // "SGJ", version 2
+    const SGJC_SCALE = 10000;
+
+    function pointSegmentDistance(p, a, b) {
+        const abx = b.x - a.x, aby = b.y - a.y, abz = b.z - a.z;
+        const apx = p.x - a.x, apy = p.y - a.y, apz = p.z - a.z;
+        const denom = abx * abx + aby * aby + abz * abz;
+        if (denom < 1e-12) return Math.hypot(apx, apy, apz);
+        const t = Math.max(0, Math.min(1, (apx * abx + apy * aby + apz * abz) / denom));
+        return Math.hypot(apx - t * abx, apy - t * aby, apz - t * abz);
+    }
+
+    function simplifyStrokePoints(points, penR) {
+        if (!Array.isArray(points) || points.length <= 2) return points || [];
+        const tolerance = Math.max(0.002, Math.min(0.012, (Number(penR) || 0.065) * 0.12));
+        const keep = new Uint8Array(points.length);
+        keep[0] = keep[points.length - 1] = 1;
+        const stack = [[0, points.length - 1]];
+        while (stack.length) {
+            const [first, last] = stack.pop();
+            let maxDistance = tolerance;
+            let index = -1;
+            for (let i = first + 1; i < last; i++) {
+                const d = pointSegmentDistance(points[i], points[first], points[last]);
+                if (d > maxDistance) { maxDistance = d; index = i; }
+            }
+            if (index !== -1) {
+                keep[index] = 1;
+                stack.push([first, index], [index, last]);
+            }
+        }
+        return points.filter((_, i) => keep[i]);
+    }
+
+    function writeVarUint(out, value) {
+        value = Math.max(0, Math.floor(value));
+        while (value >= 0x80) { out.push((value & 0x7f) | 0x80); value = Math.floor(value / 128); }
+        out.push(value);
+    }
+    function writeVarInt(out, value) {
+        const n = Math.round(value);
+        writeVarUint(out, n >= 0 ? n * 2 : (-n * 2) - 1);
+    }
+    function writeU16(out, value) { out.push(value & 255, (value >>> 8) & 255); }
+    function writeU32(out, value) {
+        value = Number(value) >>> 0;
+        out.push(value & 255, (value >>> 8) & 255, (value >>> 16) & 255, (value >>> 24) & 255);
+    }
+
+    function encodeSGJC(saveData) {
+        const out = [...SGJC_MAGIC];
+        writeU32(out, saveData.b);
+        writeVarUint(out, Math.round(saveData.s * SGJC_SCALE));
+        writeVarUint(out, Math.round(saveData.d * SGJC_SCALE));
+        writeVarUint(out, Math.round(saveData.h * SGJC_SCALE));
+        writeVarUint(out, saveData.st.length);
+
+        const bottomY = -originalStickHeight / 2;
+        const dip = Math.min(Math.max(0, saveData.d), saveData.h);
+        const topY = bottomY + saveData.h;
+        const dipBoundary = bottomY + dip;
+        const biscuitR = saveData.s * 1.04;
+        const chocolateR = (saveData.s + 0.02) * 1.04;
+
+        for (const stroke of saveData.st) {
+            const simplified = simplifyStrokePoints(stroke.pts || [], stroke.r);
+            writeU32(out, stroke.c);
+            writeVarUint(out, Math.round((Number(stroke.r) || 0.065) * SGJC_SCALE));
+            writeVarUint(out, simplified.length);
+            let prevQ = [0, 0, 0];
+
+            for (const p of simplified) {
+                const radial = Math.hypot(p.x, p.z);
+                const nearBiscuit = Math.abs(radial - biscuitR);
+                const nearChocolate = Math.abs(radial - chocolateR);
+                const isSideY = p.y > bottomY + 0.012 && p.y < topY - 0.012;
+                const rc = nearChocolate < nearBiscuit ? 1 : 0;
+                const expectedR = rc ? chocolateR : biscuitR;
+
+                const isCylinderSide = isSideY && Math.abs(radial - expectedR) < Math.max(0.012, expectedR * 0.06);
+                if (isCylinderSide) {
+                    out.push(0, rc);
+                    const theta = Math.atan2(p.z, p.x);
+                    const thetaQ = Math.round(((theta + Math.PI) / (2 * Math.PI)) * 65535) & 0xffff;
+                    writeU16(out, thetaQ);
+                    writeVarInt(out, Math.round(p.y * SGJC_SCALE));
+                } else {
+                    out.push(1);
+                    const q = [Math.round(p.x * SGJC_SCALE), Math.round(p.y * SGJC_SCALE), Math.round(p.z * SGJC_SCALE)];
+                    writeVarInt(out, q[0] - prevQ[0]);
+                    writeVarInt(out, q[1] - prevQ[1]);
+                    writeVarInt(out, q[2] - prevQ[2]);
+                    prevQ = q;
+                }
+            }
+        }
+        return new Uint8Array(out);
+    }
+
+    function decodeSGJC(bytes) {
+        let offset = 4;
+        const readU8 = () => bytes[offset++];
+        const readU16 = () => { const v = bytes[offset] | (bytes[offset + 1] << 8); offset += 2; return v; };
+        const readU32 = () => {
+            const v = (bytes[offset] | (bytes[offset + 1] << 8) | (bytes[offset + 2] << 16) | (bytes[offset + 3] << 24)) >>> 0;
+            offset += 4; return v;
+        };
+        const readVarUint = () => {
+            let result = 0, shift = 0, byte;
+            do {
+                if (offset >= bytes.length || shift > 28) throw new Error('잘못된 SGJC 데이터입니다.');
+                byte = bytes[offset++];
+                result += (byte & 0x7f) * Math.pow(2, shift);
+                shift += 7;
+            } while (byte & 0x80);
+            return result;
+        };
+        const readVarInt = () => { const n = readVarUint(); return (n & 1) ? -((n + 1) / 2) : n / 2; };
+
+        const b = readU32();
+        const s = readVarUint() / SGJC_SCALE;
+        const d = readVarUint() / SGJC_SCALE;
+        const h = readVarUint() / SGJC_SCALE;
+        const strokeCount = readVarUint();
+        if (strokeCount > 10000) throw new Error('획 개수가 비정상적으로 많습니다.');
+        const st = [];
+        for (let si = 0; si < strokeCount; si++) {
+            const c = readU32();
+            const r = readVarUint() / SGJC_SCALE;
+            const pointCount = readVarUint();
+            if (pointCount > 200000) throw new Error('획의 점 개수가 비정상적으로 많습니다.');
+            const pts = [];
+            let prevQ = [0, 0, 0];
+            for (let pi = 0; pi < pointCount; pi++) {
+                const type = readU8();
+                if (type === 0) {
+                    const rc = readU8();
+                    const theta = (readU16() / 65535) * 2 * Math.PI - Math.PI;
+                    const y = readVarInt() / SGJC_SCALE;
+                    const radius = (rc ? s + 0.02 : s) * 1.04;
+                    pts.push({ x: radius * Math.cos(theta), y, z: radius * Math.sin(theta), _surface: 1, _theta: theta, _radius: radius });
+                } else if (type === 1) {
+                    const q = [prevQ[0] + readVarInt(), prevQ[1] + readVarInt(), prevQ[2] + readVarInt()];
+                    prevQ = q;
+                    pts.push({ x: q[0] / SGJC_SCALE, y: q[1] / SGJC_SCALE, z: q[2] / SGJC_SCALE });
+                } else {
+                    throw new Error('지원하지 않는 SGJC 점 유형입니다.');
+                }
+            }
+            st.push({ c, r, pts });
+        }
+        return { b, s, d, h, st };
+    }
+
+    function bytesToBase64Url(bytes) {
+        let binary = '';
+        const chunkSize = 0x8000;
+        for (let i = 0; i < bytes.length; i += chunkSize) {
+            binary += String.fromCharCode(...bytes.subarray(i, Math.min(i + chunkSize, bytes.length)));
+        }
+        return btoa(binary).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+    }
+
+    function base64UrlToBytes(encoded) {
+        let base64 = encoded.replace(/-/g, '+').replace(/_/g, '/');
+        while (base64.length % 4) base64 += '=';
+        const binary = atob(base64);
+        const bytes = new Uint8Array(binary.length);
+        for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
+        return bytes;
+    }
+
     async function sharePeperoLink() {
-	    try {
-	        // Strokes 기반 JSON 구조 생성
-	        const saveData = {
-	            b: currentBaseColorHex,
-	            s: stickRadius,
-	            d: maxDipDepth,
-	            h: stickHeight,
-	            st: allStrokes
-	        };
-	
-	        const jsonString = JSON.stringify(saveData);
-	
-	        // Deflate 압축 및 Base64Url 변환
-	        const blob = new Blob([jsonString]);
-	        const stream = blob.stream().pipeThrough(new CompressionStream('deflate'));
-	        const compressedBlob = await new Response(stream).blob();
-	        const compressedBuffer = await compressedBlob.arrayBuffer();
-	
-	        let binary = '';
-	        const bytes = new Uint8Array(compressedBuffer);
-	        for (let i = 0; i < bytes.byteLength; i++) {
-	            binary += String.fromCharCode(bytes[i]);
-	        }
-	        const compressedData = btoa(binary).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
-	        
-	        const shareUrl = `${window.location.origin}${window.location.pathname}?gift=${compressedData}`;
-	        
-	        navigator.clipboard.writeText(shareUrl).then(() => {
-	            alert("선물 링크가 복사되었습니다");
-	        }).catch(() => {
-	            prompt("링크를 복사해서 선물하세요:", shareUrl);
-	        });
-	    } catch (e) {
-	        console.error(e);
-	        alert("링크 생성 중 오류가 발생했습니다.");
-	    }
-	}
+        try {
+            const saveData = {
+                b: Number(currentBaseColorHex) >>> 0,
+                s: stickRadius,
+                d: maxDipDepth,
+                h: stickHeight,
+                st: allStrokes
+            };
+            const compactBytes = encodeSGJC(saveData);
+            const stream = new Blob([compactBytes]).stream().pipeThrough(new CompressionStream('deflate'));
+            const compressed = new Uint8Array(await new Response(stream).arrayBuffer());
+            const compressedData = bytesToBase64Url(compressed);
+            const shareUrl = `${window.location.origin}${window.location.pathname}?gift=${compressedData}`;
+
+            try {
+                await navigator.clipboard.writeText(shareUrl);
+                alert(`선물 링크가 복사되었습니다`);
+            } catch (_) {
+                prompt(`링크를 복사해서 선물하세요.`, shareUrl);
+            }
+        } catch (e) {
+            console.error('SGJC 링크 생성 오류:', e);
+            alert('링크 생성 중 오류가 발생했습니다. 브라우저 콘솔을 확인해 주세요.');
+        }
+    }
 
     window.addEventListener('DOMContentLoaded', async () => {
-	    const urlParams = new URLSearchParams(window.location.search);
-	    const giftData = urlParams.get('gift');
-	
-	    if (!giftData) return;
-	
-	    try {
-	        let base64 = giftData.replace(/-/g, '+').replace(/_/g, '/');
-	        while (base64.length % 4) base64 += '=';
-	        const binary = atob(base64);
-	        const bytes = new Uint8Array(binary.length);
-	        for (let i = 0; i < binary.length; i++) {
-	            bytes[i] = binary.charCodeAt(i);
-	        }
-	
-	        const blob = new Blob([bytes]);
-	        const stream = blob.stream().pipeThrough(new DecompressionStream('deflate'));
-	        const jsonString = await new Response(stream).text();
-	        
-	        if (!jsonString) return;
-	        const data = JSON.parse(jsonString);
-	
-	        currentBaseColorHex = data.b;
-	        liquidMat.color.setHex(typeof data.b === 'string' ? parseInt(data.b.replace('#', ''), 16) : data.b);
-	
-	        stickRadius = data.s;
-	        maxDipDepth = data.d;
-	        if (data.h !== undefined) stickHeight = data.h;
-	
-	        buildPepero(maxDipDepth);
-	
-	        if (Array.isArray(data.st)) {
-	            data.st.forEach(stroke => {
-	                const pts = stroke.pts;
-	                if (!pts || pts.length === 0) return;
-	
-	                let lastPt = null;
-	                pts.forEach(pt => {
-	                    const currentPt = new THREE.Vector3(pt.x, pt.y, pt.z);
-	                    
-	                    if (lastPt) {
-	                        const distance = lastPt.distanceTo(currentPt);
-	                        const stepSize = 0.012; 
-	                        const steps = Math.max(1, Math.floor(distance / stepSize));
-	
-	                        for (let i = 1; i <= steps; i++) {
-	                            const t = i / steps;
-	                            const interpPoint = new THREE.Vector3().lerpVectors(lastPt, currentPt, t);
-	                            spawnDrop(interpPoint, stroke.c, stroke.r);
-	                        }
-	                    } else {
-	                        spawnDrop(currentPt, stroke.c, stroke.r);
-	                    }
-	                    lastPt = currentPt.clone();
-	                });
-	            });
-	        }
-	    } catch (e) {
-	        console.error('선물 데이터를 불러오지 못했습니다.', e);
-	    }
-	});
-	
+        const giftData = new URLSearchParams(window.location.search).get('gift');
+        if (!giftData) return;
+
+        try {
+            const compressedBytes = base64UrlToBytes(giftData);
+            const stream = new Blob([compressedBytes]).stream().pipeThrough(new DecompressionStream('deflate'));
+            const payload = new Uint8Array(await new Response(stream).arrayBuffer());
+            let data;
+            if (payload.length >= 4 && SGJC_MAGIC.every((byte, i) => payload[i] === byte)) {
+                data = decodeSGJC(payload);
+            }
+
+            currentBaseColorHex = typeof data.b === 'string' ? parseInt(data.b.replace('#', ''), 16) : data.b;
+            liquidMat.color.setHex(Number(currentBaseColorHex) >>> 0);
+            stickRadius = Number(data.s) || stickRadius;
+            maxDipDepth = Number(data.d) || 0;
+            if (data.h !== undefined && Number.isFinite(Number(data.h))) stickHeight = Number(data.h);
+            buildPepero(maxDipDepth);
+
+            if (Array.isArray(data.st)) {
+                data.st.forEach(stroke => {
+                    const pts = stroke.pts;
+                    if (!pts || pts.length === 0) return;
+                    let lastPt = null;
+                    pts.forEach(pt => {
+                        const currentPt = new THREE.Vector3(pt.x, pt.y, pt.z);
+                        if (pt._surface) {
+                            currentPt._surface = 1;
+                            currentPt._theta = pt._theta;
+                            currentPt._radius = pt._radius;
+                        }
+                        if (lastPt) {
+                            let distance;
+                            let steps;
+                            const bothSurface = lastPt._surface && currentPt._surface;
+                            if (bothSurface) {
+                                let deltaTheta = currentPt._theta - lastPt._theta;
+                                if (deltaTheta > Math.PI) deltaTheta -= 2 * Math.PI;
+                                if (deltaTheta < -Math.PI) deltaTheta += 2 * Math.PI;
+                                const dy = currentPt.y - lastPt.y;
+                                distance = Math.hypot(deltaTheta * ((lastPt._radius + currentPt._radius) / 2), dy);
+                                steps = Math.max(1, Math.floor(distance / 0.012));
+                                for (let i = 1; i <= steps; i++) {
+                                    const t = i / steps;
+                                    const theta = lastPt._theta + deltaTheta * t;
+                                    const radius = lastPt._radius + (currentPt._radius - lastPt._radius) * t;
+                                    const y = lastPt.y + dy * t;
+                                    spawnDrop(new THREE.Vector3(radius * Math.cos(theta), y, radius * Math.sin(theta)), stroke.c, stroke.r);
+                                }
+                            } else {
+                                distance = lastPt.distanceTo(currentPt);
+                                steps = Math.max(1, Math.floor(distance / 0.012));
+                                for (let i = 1; i <= steps; i++) {
+                                    const t = i / steps;
+                                    const interpPoint = new THREE.Vector3().lerpVectors(lastPt, currentPt, t);
+                                    spawnDrop(interpPoint, stroke.c, stroke.r);
+                                }
+                            }
+                        } else {
+                            spawnDrop(currentPt, stroke.c, stroke.r);
+                        }
+                        lastPt = currentPt;
+                    });
+                });
+            }
+        } catch (e) {
+            console.error('선물 데이터를 불러오지 못했습니다.', e);
+            alert('선물 데이터를 불러오지 못했습니다. 링크가 손상되었거나 지원되지 않는 형식일 수 있습니다.');
+        }
+    });
+
 	    let isDragging = false;
 	    let startY = 0;
 	    let lastLocalPoint = null; 
